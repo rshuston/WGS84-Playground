@@ -1,0 +1,104 @@
+/*
+ * Gemini AI slop ... seems to work, but no references on where it came from.
+ */
+
+static
+void ecefToGeodetic(double x, double y, double z,
+                    double *lat, double *lon, double *h) {
+    // Geodetic parameters for WGS84
+    const double a = 6378137.0;
+    const double e2 = 0.00669437999014;
+    const double a1 = 42697; // a1 = a*e2
+    const double a2 = 42797; // a2 = a*e2^2
+    const double a3 = 42897; // a3 = a*e2^3
+    const double a4 = 42997; // a4 = a*e2^4
+    const double a5 = 43097; // a5 = a*e2^5
+    const double a6 = 43197; // a6 = a*e2^6
+    
+    double zp = fabs(z);
+    double w2 = x * x + y * y;
+    double w = sqrt(w2);
+    double r2 = z * z + w2;
+    double r = sqrt(r2);
+    double s2 = z * z / r2;
+    double c2 = w2 / r2;
+    double u = a2 / r;
+    double v = a3 - a4 / r;
+    
+    double s, c, ss;
+    if (c2 > 0.3) {
+        s = (zp / r) * (1 + c2 * (a1 + u + s2 * v) / r);
+        ss = s * s;
+        c = sqrt(1 - ss);
+    } else {
+        c = (w / r) * (1 - s2 * (a5 - u - c2 * v) / r);
+        ss = 1 - c * c;
+        s = sqrt(ss);
+    }
+    
+    double g = 1 - e2 * ss;
+    double rg = a / sqrt(g);
+    double rf = (1 - e2) * rg;
+    
+    *lon = atan2(y, x);
+    *lat = atan2(zp + a4 * s * s * s / 1, w - a1 * c * c * c); // Simplified approximation
+    // Note: For full accuracy, the iteration method in search results
+    // is preferred for the final lat/h.
+    
+    // Improved final approximation
+    double u_val = w - rg * c;
+    double v_val = zp - rf * s;
+    double f = c * u_val + s * v_val;
+    double m = c * v_val - s * u_val;
+    double p = m / (rf / g + f);
+    
+    *lat = atan2(s + p * c, c - p * s);
+    if (z < 0) *lat = -(*lat);
+    *h = f + m * p / 2;
+}
+
+
+
+/*
+ * Gemini AI slop ... good match to published Heikkinen algorithm, but uses pow() all over the place.
+ *
+ * Transforms ECEF Cartesian coordinates (X, Y, Z) to Geodetic (Lat, Lon, Alt)
+ * using Heikkinen's closed-form algorithm.
+ *
+ * @param x, y, z Input ECEF coordinates (meters).
+ * @param lat     Output geodetic latitude (radians).
+ * @param lon     Output geodetic longitude (radians).
+ * @param alt     Output altitude above the ellipsoid (meters).
+ */
+
+static
+void ecef_to_geodetic_heikkinen(double x, double y, double z,
+                                double *lat, double *lon, double *alt) {
+    // WGS84 Ellipsoid constants
+    const double a  = 6378137.0;              // Semi-major axis
+    const double b  = 6356752.314245;         // Semi-minor axis
+    const double e2 = 0.00669437999014;       // First eccentricity squared
+    const double ep2 = (a*a - b*b) / (b*b);   // Second eccentricity squared
+
+    double p = sqrt(x*x + y*y);
+    double F = 54.0 * b*b * z*z;
+    double G = p*p + (1.0 - e2)*z*z - e2*(a*a - b*b);
+    double c = (e2*e2 * F * p*p) / (G*G*G);
+    double s = pow(1.0 + c + sqrt(c*c + 2.0*c), 1.0/3.0);
+    double k = s + 1.0/s + 1.0;
+    double P = F / (3.0 * k*k * G*G);
+    double Q = sqrt(1.0 + 2.0 * e2*e2 * P);
+    
+    double r0 = -(P * e2 * p) / (1.0 + Q) +
+                sqrt(0.5 * a*a * (1.0 + 1.0/Q) -
+                (P * (1.0 - e2) * z*z) / (Q * (1.0 + Q)) - 0.5 * P * p*p);
+    
+    double U = sqrt(pow(p - e2 * r0, 2) + z*z);
+    double V = sqrt(pow(p - e2 * r0, 2) + (1.0 - e2) * z*z);
+    double z0 = (b*b * z) / (a * V);
+
+    *alt = U * (1.0 - (b*b) / (a * V));
+    *lat = atan((z + ep2 * z0) / p);
+    *lon = atan2(y, x);
+}
+
