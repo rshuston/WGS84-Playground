@@ -30,7 +30,7 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:../WGS84-Playground.xctestplan"
+            reference = "container:WGS84-Playground.xctestplan"
             default = "YES">
          </TestPlanReference>
       </TestPlans>

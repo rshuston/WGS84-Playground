@@ -1,0 +1,25 @@
+{
+  "configurations" : [
+    {
+      "id" : "47D41528-8E9E-4921-9ED1-CCD32828CC42",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:WGS84-Playground.xcodeproj",
+        "identifier" : "4EB301F82F9D874700A7665B",
+        "name" : "WGS84 Tests"
+      }
+    }
+  ],
+  "version" : 1
+}
