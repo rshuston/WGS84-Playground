@@ -93,4 +93,21 @@
     XCTAssertEqualWithAccuracy(10000.0, height, 1);
 }
 
+- (void)test_ecef2geodetic_SomewhereElsewhere {
+    double latitude = 2.0 * M_PI;
+    double longitude = 2.0 * M_PI;
+    double height = 2.0 * wgs84_a;
+
+    // Numerical values obtained from:
+    // Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
+    // Global Positioning System, Theory and Practice, 3rd ed.
+    // New York, Springer-Verlag Wien, 1994
+
+    wgs84_ecef2geodetic_olson(4210520.621, 1128205.600, 4643227.496, &latitude, &longitude, &height);
+
+    XCTAssertEqualWithAccuracy(47.0, rad2deg(latitude), 1e-6);
+    XCTAssertEqualWithAccuracy(15.0, rad2deg(longitude), 1e-6);
+    XCTAssertEqualWithAccuracy(2000.0, height, 1);
+}
+
 @end

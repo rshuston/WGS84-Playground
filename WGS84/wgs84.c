@@ -26,6 +26,8 @@ const double wgs84_b = 6.356752314245179e6;
 static const double wgs84_e2 = 6.694379990141316e-03;           /* 1st ecc. squared */
 static const double wgs84_ep2 = 6.739496742276434e-03;          /* 2nd ecc. squared */
 static const double wgs84_one_minus_e2 = 9.933056200098587e-01;
+static const double wgs84_one_minus_f = 9.966471893352525e-01;
+
 
 static double sqr(double x) { return x * x; }
 
@@ -51,45 +53,98 @@ int wgs84_ecef2geodetic_iter(double x, double y, double z, double *phi, double *
 
     r = sqrt(x * x + y * y);
 
-    if (r < 1e-6 * wgs84_b) /* 1e-6 radians corresponds to a 0.2 second arc angle at pole */
+    phi_kp1 = atan2(z, r * wgs84_one_minus_e2);
+    for (k = 1; k <= 10; k++) /* typically 5 iterations gives centimeter accuracy for terrestrial locations */
     {
-        if (z >= 0)
-        {
-            *phi = M_PI_2;
-            *h = z - wgs84_b;
-        }
-        else
-        {
-            *phi = -M_PI_2;
-            *h = -z - wgs84_b;
-        }
-    }
-    else
-    {
-        phi_kp1 = atan2(z, r * wgs84_one_minus_e2);
-        for (k = 1; k <= 10; k++) /* typically 5 iterations gives centimeter accuracy for terrestrial locations */
-        {
-            phi_k = phi_kp1;
-            cos_phi_k = cos(phi_k);
-            sin_phi_k = sin(phi_k);
-            R_k = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_k * sin_phi_k);
-            h_k = r / cos_phi_k - R_k;
-
-            phi_kp1 = atan2(z, r * (1.0 - wgs84_e2 * R_k / (R_k + h_k)));
-            if (fabs(phi_kp1 - phi_k) < 1e-10) break;
-        }
-
         phi_k = phi_kp1;
         cos_phi_k = cos(phi_k);
         sin_phi_k = sin(phi_k);
         R_k = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_k * sin_phi_k);
-        h_k = r / cos_phi_k - R_k;
+        if (fabs(phi_k) <= M_PI_4) { /* Guard against /0 by using best form of h */
+            h_k = r / cos_phi_k - R_k;
+        }
+        else
+        {
+            h_k = z / sin_phi_k - wgs84_one_minus_e2 * R_k;
+        }
 
-        *phi = phi_kp1;
-        *h = h_k;
+        phi_kp1 = atan2(z, r * (1.0 - wgs84_e2 * R_k / (R_k + h_k)));
+        if (fabs(phi_kp1 - phi_k) < 1e-10) break;
     }
 
+    phi_k = phi_kp1;
+    cos_phi_k = cos(phi_k);
+    sin_phi_k = sin(phi_k);
+    R_k = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_k * sin_phi_k);
+    if (fabs(phi_k) <= M_PI_4) { /* Guard against /0 by using best form of h */
+        h_k = r / cos_phi_k - R_k;
+    }
+    else
+    {
+        h_k = z / sin_phi_k - wgs84_one_minus_e2 * R_k;
+    }
+
+    *phi = phi_k;
+    *h = h_k;
+
     return k;
+}
+
+
+/*
+ * Bowring's method, single iteration is sufficiently accurate for most general applications
+ *
+ * Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
+ * Global Positioning System, Theory and Practice, 3rd ed.
+ * New York, Springer-Verlag Wien, 1994
+ */
+
+void wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, double *lambda, double *h)
+{
+    double r, numer, denom, norm, cos_theta, sin_theta, cos_phi, sin_phi, R;
+
+    *lambda = atan2(y, x);
+    if (*lambda >= M_PI)
+    {
+        *lambda -= 2.0 * M_PI; /* atan2() can return +M_PI, so we need to normalize to -M_PI */
+    }
+    
+    r = sqrt(x * x + y * y);
+
+    /*
+     * theta = atan2(z * wgs84_a, r * wgs84_b);
+     * ... or
+     * theta = atan2(z, r * wgs84_one_minus_f);
+     * cos_theta = cos(theta);
+     * sin_theta = sin(theta);
+     */
+    numer = z;
+    denom = r * wgs84_one_minus_f;
+    norm = sqrt(numer * numer + denom * denom);
+    sin_theta = numer / norm;
+    cos_theta = denom / norm;
+    
+    /*
+     * *phi = atan2(z + wgs84_ep2 * wgs84_b * sin_theta * sin_theta * sin_theta,
+     *              r - wgs84_e2 * wgs84_a * cos_theta * cos_theta * cos_theta);
+     * cos_phi = cos(*phi);
+     * sin_phi = sin(*phi);
+     */
+    numer = z + wgs84_ep2 * wgs84_b * sin_theta * sin_theta * sin_theta;
+    denom = r - wgs84_e2 * wgs84_a * cos_theta * cos_theta * cos_theta;
+    norm = sqrt(numer * numer + denom * denom);
+    sin_phi = numer / norm;
+    cos_phi = denom / norm;
+    *phi = atan2(sin_phi, cos_phi);
+    
+    R = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi * sin_phi);
+    if (fabs(*phi) <= M_PI_4) { /* Guard against /0 by using best form of h */
+        *h = r / cos_phi - R;
+    }
+    else
+    {
+        *h = z / sin_phi - wgs84_one_minus_e2 * R;
+    }
 }
 
 
@@ -226,6 +281,7 @@ void wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double
         *lon -= 2.0 * M_PI; /* atan2() can return +M_PI, so we need to normalize to -M_PI */
     }
 }
+
 
 /*
  * Standard method to convert geodetic to ECEF

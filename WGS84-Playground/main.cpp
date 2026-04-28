@@ -14,7 +14,7 @@ const double lambda_reference_deg = 45.0;
 
 const double phi_min_deg = -90.0;
 const double phi_max_deg = 90.0;
-const double phi_step_deg = 0.25;
+const double phi_step_deg = 0.1;
 
 const double h_min_m = -20000.0;    // Mariana trench is -10984 m
 const double h_max_m = 100000.0;    // Airliner altitudes are 11600 m, GPS orbit height is 20180 km
@@ -54,7 +54,7 @@ int main(int argc, const char * argv[]) {
     std::chrono::steady_clock::time_point start, end;
     std::chrono::duration<double, std::milli> duration;
     double duration_ms;
-    
+
     start = std::chrono::high_resolution_clock::now();
     for (int k = 0; k < N_points; k++)
     {
@@ -66,7 +66,19 @@ int main(int argc, const char * argv[]) {
     duration = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start);
     duration_ms = duration.count();
     printf("Iterative time elapsed: %f ms\n", duration_ms);
-    
+
+    start = std::chrono::high_resolution_clock::now();
+    for (int k = 0; k < N_points; k++)
+    {
+        int k3 = 3 * k;
+        wgs84_ecef2geodetic_bowring(EcefPoints[k3], EcefPoints[k3 + 1], EcefPoints[k3 + 2],
+                                    &GeodeticPoints[k3], &GeodeticPoints[k3 + 1], &GeodeticPoints[k3 + 2]);
+    }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start);
+    duration_ms = duration.count();
+    printf("Bowring time elapsed:   %f ms\n", duration_ms);
+
     start = std::chrono::high_resolution_clock::now();
     for (int k = 0; k < N_points; k++)
     {
@@ -78,7 +90,7 @@ int main(int argc, const char * argv[]) {
     duration = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(end - start);
     duration_ms = duration.count();
     printf("Heikkinen time elapsed: %f ms\n", duration_ms);
-    
+
     start = std::chrono::high_resolution_clock::now();
     for (int k = 0; k < N_points; k++)
     {

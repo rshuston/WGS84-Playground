@@ -100,4 +100,24 @@
     XCTAssertEqualWithAccuracy(4494419.477, z, 0.001);
 }
 
+- (void)test_geodetic2ecef_SomewhereElsewhere {
+    double x = 0.0;
+    double y = 0.0;
+    double z = 0.0;
+
+    // Numerical values obtained from:
+    // Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
+    // Global Positioning System, Theory and Practice, 3rd ed.
+    // New York, Springer-Verlag Wien, 1994
+    double latitude = deg2rad(47.0);
+    double longitude = deg2rad(15.0);
+    double height = 2000.0;  // meters
+
+    wgs84_geodetic2ecef(latitude, longitude, height, &x, &y, &z);
+
+    XCTAssertEqualWithAccuracy(4210520.621, x, 0.001);
+    XCTAssertEqualWithAccuracy(1128205.600, y, 0.001);
+    XCTAssertEqualWithAccuracy(4643227.496, z, 0.001);
+}
+
 @end
