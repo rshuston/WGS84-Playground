@@ -15,9 +15,9 @@ extern const double wgs84_b;            /* Semi-minor axis, meters */
  */
 
 int wgs84_ecef2geodetic_iter(double x, double y, double z, double *phi, double *lambda, double *h);
-void wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, double *lambda, double *h);
-void wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi, double *lambda, double *h);
-void wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double *lon, double *ht);
+int wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, double *lambda, double *h);
+int wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi, double *lambda, double *h);
+int wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double *lon, double *ht);
 
 void wgs84_geodetic2ecef(double phi, double lambda, double h, double *x, double *y, double *z);
 

@@ -23,10 +23,10 @@ const double wgs84_b = 6.356752314245179e6;
  * Private constants and functions
  */
 
-static const double wgs84_e2 = 6.694379990141316e-03;           /* 1st ecc. squared */
-static const double wgs84_ep2 = 6.739496742276434e-03;          /* 2nd ecc. squared */
-static const double wgs84_one_minus_e2 = 9.933056200098587e-01;
-static const double wgs84_one_minus_f = 9.966471893352525e-01;
+static const double wgs84_e2 = 6.694379990141316e-03;           /* 1st ecc. squared, e^2 */
+static const double wgs84_ep2 = 6.739496742276434e-03;          /* 2nd ecc. squared, (e')^2 */
+static const double wgs84_one_minus_e2 = 9.933056200098587e-01; /* 1 - e^2 */
+static const double wgs84_one_minus_f = 9.966471893352525e-01;  /* 1 - f */
 
 
 static double sqr(double x) { return x * x; }
@@ -92,32 +92,50 @@ int wgs84_ecef2geodetic_iter(double x, double y, double z, double *phi, double *
 
 
 /*
- * Bowring's method, single iteration is sufficiently accurate for most general applications
+ * Bowring's method, single iteration is sufficiently accurate for most applications
+ *
+ * Bowring, B. R.
+ * Transformation from Spatial to Geographical Coordinates
+ * Survey Review XXIII, 181, 323–327, 1976
  *
  * Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
  * Global Positioning System, Theory and Practice, 3rd ed.
  * New York, Springer-Verlag Wien, 1994
  */
 
-void wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, double *lambda, double *h)
+int wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, double *lambda, double *h)
 {
+    static const double e2_x_a = 4.269767270717996e+04; /* e^2 * a */
+    static const double ep2_x_b = 4.284131151331357e4;  /* (e')^2 * b */
+    
     double r, numer, denom, norm, cos_theta, sin_theta, cos_phi, sin_phi, R;
 
+    /*
+     * Longitude is straightforward
+     */
+    
     *lambda = atan2(y, x);
     if (*lambda >= M_PI)
     {
         *lambda -= 2.0 * M_PI; /* atan2() can return +M_PI, so we need to normalize to -M_PI */
     }
     
+    /*
+     * Equatorial range is also straightforward
+     */
+    
     r = sqrt(x * x + y * y);
 
     /*
+     * Make initial guess of latitude
+     *
      * theta = atan2(z * wgs84_a, r * wgs84_b);
      * ... or
      * theta = atan2(z, r * wgs84_one_minus_f);
      * cos_theta = cos(theta);
      * sin_theta = sin(theta);
      */
+    
     numer = z;
     denom = r * wgs84_one_minus_f;
     norm = sqrt(numer * numer + denom * denom);
@@ -125,38 +143,47 @@ void wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, doub
     cos_theta = denom / norm;
     
     /*
+     * One iteration is sufficient to reach better than 1e-4 m (i.e., 0.1 mm) accuracy
+     *
      * *phi = atan2(z + wgs84_ep2 * wgs84_b * sin_theta * sin_theta * sin_theta,
-     *              r - wgs84_e2 * wgs84_a * cos_theta * cos_theta * cos_theta);
+     *              r - wgs84_e2_x_a * cos_theta * cos_theta * cos_theta);
      * cos_phi = cos(*phi);
      * sin_phi = sin(*phi);
      */
-    numer = z + wgs84_ep2 * wgs84_b * sin_theta * sin_theta * sin_theta;
-    denom = r - wgs84_e2 * wgs84_a * cos_theta * cos_theta * cos_theta;
+    
+    numer = z + ep2_x_b * sin_theta * sin_theta * sin_theta;
+    denom = r - e2_x_a * cos_theta * cos_theta * cos_theta;
     norm = sqrt(numer * numer + denom * denom);
     sin_phi = numer / norm;
     cos_phi = denom / norm;
     *phi = atan2(sin_phi, cos_phi);
     
+    /*
+     * Now that we have latitude, compute the height
+     */
+    
     R = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi * sin_phi);
-    if (fabs(*phi) <= M_PI_4) { /* Guard against /0 by using best form of h */
+    if (fabs(*phi) <= M_PI_4) { /* Guard against /0 by using best form for h */
         *h = r / cos_phi - R;
     }
     else
     {
         *h = z / sin_phi - wgs84_one_minus_e2 * R;
     }
+    
+    return 1;
 }
 
 
 /*
- * Heikkinen's method: Optimized to compute fewest terms, but requires cbrt() (use pow() if you must)
+ * Heikkinen's method: Optimized to compute fewest terms, but requires cbrt() (or pow(*,1/3) if you must)
  *
  * Elliot D. Kaplan, Ed.
  * Understanding GPS, Principles and Applications
  * Boston, MA, Academic Press, Inc., 1996
  */
 
-void wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi, double *lambda, double *h)
+int wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi, double *lambda, double *h)
 {
     static const double a2 = 4.068063159076900e13;      /* a^2 */
     static const double b2 = 4.040829998466145e13;      /* b^2 */
@@ -201,12 +228,14 @@ void wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi,
     {
         *lambda -= 2.0 * M_PI; /* atan2() can return +M_PI, so we need to normalize to -M_PI */
     }
+    
+    return 1;
 }
 
 
 /*
  * Olson's method: Same accuracy as Heikkinen but requires less computations, does not need
- * a cube root operation, and is 63% quicker.
+ * a cube root operation, and is 63% quicker according to original paper.
  *
  * Code is taken directly from the IEEE AES article referenced below, but with constants
  * made static const so they aren't computed at runtime, and with a finishing change to
@@ -217,7 +246,7 @@ void wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi,
  * IEEE Trans. on Aerospace and Electronic Systems, Vol. 32, Issue 1, January 1996
  */
 
-void wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double *lon, double *ht)
+int wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double *lon, double *ht)
 {
     static const double a = 6378137.0; /*wgs-84*/
     static const double e2 = 6.6943799901377997e-3;
@@ -242,7 +271,7 @@ void wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double
         *lat = 0.;
         *lon = 0.;
         *ht = -1.e7;
-        return;
+        return 1;
     }
     *lon = atan2(y,x);
     s2 = z2/r2;
@@ -280,19 +309,21 @@ void wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double
     {
         *lon -= 2.0 * M_PI; /* atan2() can return +M_PI, so we need to normalize to -M_PI */
     }
+    
+    return 1;
 }
 
 
 /*
  * Standard method to convert geodetic to ECEF
  *
- * Elliot D. Kaplan, Ed.
- * Understanding GPS, Principles and Applications
- * Boston, MA, Academic Press, Inc., 1996
- *
  * Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
  * Global Positioning System, Theory and Practice, 3rd ed.
  * New York, Springer-Verlag Wien, 1994
+ *
+ * Elliot D. Kaplan, Ed.
+ * Understanding GPS, Principles and Applications
+ * Boston, MA, Academic Press, Inc., 1996
  */
 
 void wgs84_geodetic2ecef(double phi, double lambda, double h, double *x, double *y, double *z)
