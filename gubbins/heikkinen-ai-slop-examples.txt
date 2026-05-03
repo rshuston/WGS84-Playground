@@ -1,5 +1,6 @@
 /*
- * Gemini AI slop ... seems to work, but no references on where it came from.
+ * Gemini AI slop ... seems to work, but no references on where it came from, and has
+ * inappropriate use of Bowring formula in the middle.
  */
 
 static
@@ -60,8 +61,11 @@ void ecefToGeodetic(double x, double y, double z,
 
 
 /*
- * Gemini AI slop ... good match to published Heikkinen algorithm, but uses pow() all over the place.
- *
+ * Gemini AI slop ... good match to published Heikkinen algorithm, but uses pow() for squaring
+ * and cube root.
+ */
+
+/*
  * Transforms ECEF Cartesian coordinates (X, Y, Z) to Geodetic (Lat, Lon, Alt)
  * using Heikkinen's closed-form algorithm.
  *
