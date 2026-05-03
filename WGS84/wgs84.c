@@ -34,6 +34,7 @@ static double sqr(double x) { return x * x; }
 
 /*
  * Iterative method, typically converges in less than 5 iterations for terrestrial locaions
+ * (coded to avoid using transcendentals during the iteration loop)
  *
  * Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
  * Global Positioning System, Theory and Practice, 3rd ed.
@@ -43,7 +44,10 @@ static double sqr(double x) { return x * x; }
 int wgs84_ecef2geodetic_iter(double x, double y, double z, double *phi, double *lambda, double *h)
 {
     int k = 0;
-    double r, phi_k, cos_phi_k, sin_phi_k, R_k, h_k, phi_kp1;
+    double r, numer, denom,
+           norm_k, cos_phi_k, sin_phi_k,
+           norm_km1, cos_phi_km1, sin_phi_km1,
+           Rp, h_km1;
 
     *lambda = atan2(y, x);
     if (*lambda >= M_PI)
@@ -53,39 +57,46 @@ int wgs84_ecef2geodetic_iter(double x, double y, double z, double *phi, double *
 
     r = sqrt(x * x + y * y);
 
-    phi_kp1 = atan2(z, r * wgs84_one_minus_e2);
-    for (k = 1; k <= 10; k++) /* typically 5 iterations gives centimeter accuracy for terrestrial locations */
+    /* phi_k = atan2(z, r * wgs84_one_minus_e2) */
+    numer = z;
+    denom = r * wgs84_one_minus_e2;
+    norm_k = sqrt(numer * numer + denom * denom);
+    sin_phi_k = numer / norm_k;
+    cos_phi_k = denom / norm_k;
+    for (k = 1; k <= 10; k++) /* 5 iterations gives better than 1e-6 m accuracy */
     {
-        phi_k = phi_kp1;
-        cos_phi_k = cos(phi_k);
-        sin_phi_k = sin(phi_k);
-        R_k = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_k * sin_phi_k);
-        if (fabs(phi_k) <= M_PI_4) { /* Guard against /0 by using best form of h */
-            h_k = r / cos_phi_k - R_k;
+        norm_km1 = norm_k;
+        sin_phi_km1 = sin_phi_k;
+        cos_phi_km1 = cos_phi_k;
+        Rp = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_km1 * sin_phi_km1);
+        if (fabs(cos_phi_km1) >= M_SQRT1_2) /* Guard against /0 by using best form of h */
+        {
+            h_km1 = r / cos_phi_km1 - Rp;
         }
         else
         {
-            h_k = z / sin_phi_k - wgs84_one_minus_e2 * R_k;
+            h_km1 = z / sin_phi_km1 - wgs84_one_minus_e2 * Rp;
         }
 
-        phi_kp1 = atan2(z, r * (1.0 - wgs84_e2 * R_k / (R_k + h_k)));
-        if (fabs(phi_kp1 - phi_k) < 1e-10) break;
+        /* phi_k = atan2(z, r * (1.0 - wgs84_e2 * Rp / (Rp + h_km1))) */
+        numer = z;
+        denom = r * (1.0 - wgs84_e2 * Rp / (Rp + h_km1));
+        norm_k = sqrt(numer * numer + denom * denom);
+        sin_phi_k = numer / norm_k;
+        cos_phi_k = denom / norm_k;
+        if (fabs(norm_k - norm_km1) < 1e-6) break;
     }
 
-    phi_k = phi_kp1;
-    cos_phi_k = cos(phi_k);
-    sin_phi_k = sin(phi_k);
-    R_k = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_k * sin_phi_k);
-    if (fabs(phi_k) <= M_PI_4) { /* Guard against /0 by using best form of h */
-        h_k = r / cos_phi_k - R_k;
+    *phi = atan2(sin_phi_k, cos_phi_k);
+    Rp = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi_k * sin_phi_k);
+    if (fabs(cos_phi_k) >= M_SQRT1_2) /* Guard against /0 by using best form of h */
+    {
+        *h = r / cos_phi_k - Rp;
     }
     else
     {
-        h_k = z / sin_phi_k - wgs84_one_minus_e2 * R_k;
+        *h = z / sin_phi_k - wgs84_one_minus_e2 * Rp;
     }
-
-    *phi = phi_k;
-    *h = h_k;
 
     return k;
 }
@@ -328,16 +339,16 @@ int wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double 
 
 void wgs84_geodetic2ecef(double phi, double lambda, double h, double *x, double *y, double *z)
 {
-    double cos_phi, sin_phi, cos_lambda, sin_lambda, R;
+    double cos_phi, sin_phi, cos_lambda, sin_lambda, Rp;
     
     cos_phi = cos(phi);
     sin_phi = sin(phi);
     cos_lambda = cos(lambda);
     sin_lambda = sin(lambda);
 
-    R = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi * sin_phi);
+    Rp = wgs84_a / sqrt(1.0 - wgs84_e2 * sin_phi * sin_phi);
 
-    *x = (R + h) * cos_phi * cos_lambda;
-    *y = (R + h) * cos_phi * sin_lambda;
-    *z = (R * wgs84_one_minus_e2 + h) * sin_phi;
+    *x = (Rp + h) * cos_phi * cos_lambda;
+    *y = (Rp + h) * cos_phi * sin_lambda;
+    *z = (Rp * wgs84_one_minus_e2 + h) * sin_phi;
 }
