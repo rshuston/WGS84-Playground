@@ -33,7 +33,7 @@ static double sqr(double x) { return x * x; }
 
 
 /*
- * Iterative method, typically converges in less than 5 iterations for terrestrial locaions
+ * Iterative method, typically converges in less than 5 iterations for terrestrial locations
  * (coded to avoid using transcendentals during the iteration loop)
  *
  * Hofmann-Wellenhof, B., Lichtenegger, H., and Collins, J.
@@ -154,7 +154,7 @@ int wgs84_ecef2geodetic_bowring(double x, double y, double z, double *phi, doubl
     cos_theta = denom / norm;
     
     /*
-     * One iteration is sufficient to reach better than 1e-4 m (i.e., 0.1 mm) accuracy
+     * One iteration is sufficient to reach 1e-4 m (i.e., 0.1 mm) accuracy for terrestrial locations
      *
      * *phi = atan2(z + wgs84_ep2 * wgs84_b * sin_theta * sin_theta * sin_theta,
      *              r - wgs84_e2_x_a * cos_theta * cos_theta * cos_theta);

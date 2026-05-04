@@ -18,7 +18,7 @@ const double phi_step_deg = 0.1;
 
 const double h_min_m = -20000.0;    // Mariana trench is -10984 m
 const double h_max_m = 100000.0;    // Airliner altitudes are 11600 m, GPS orbit height is 20180 km
-const double h_step_m = 1000.0;
+const double h_step_m = 100.0;
 
 
 extern "C" {
