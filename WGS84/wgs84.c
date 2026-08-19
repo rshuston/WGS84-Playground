@@ -250,7 +250,7 @@ int wgs84_ecef2geodetic_heikkinen(double xu, double yu, double zu, double *phi, 
  *
  * Code is taken directly from the IEEE AES article referenced below, but with constants
  * made static const so they aren't computed at runtime, and with a finishing change to
- * normalize longitude +M_PI to -M_PI.
+ * normalize longitude +M_PI to -M_PI. I also added return codes.
  *
  * Donald K. Olson
  * Converting Earth-centered, Earth-fixed coordinates to geodetic coordinates
@@ -282,7 +282,7 @@ int wgs84_ecef2geodetic_olson(double x, double y, double z, double *lat, double 
         *lat = 0.;
         *lon = 0.;
         *ht = -1.e7;
-        return 1;
+        return 0;
     }
     *lon = atan2(y,x);
     s2 = z2/r2;
